@@ -8,6 +8,9 @@ __pycache__/
 
 # Distribution / packaging
 .Python
+
+*.mp4
+
 build/
 develop-eggs/
 dist/
@@ -102,6 +105,7 @@ celerybeat.pid
 *.sage.py
 
 # Environments
+yoloenv/
 .env
 .venv
 env/
