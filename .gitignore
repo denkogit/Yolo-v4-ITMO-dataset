@@ -10,7 +10,7 @@ __pycache__/
 .Python
 
 *.mp4
-
+Trash/
 build/
 develop-eggs/
 dist/

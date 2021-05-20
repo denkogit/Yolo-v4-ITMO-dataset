@@ -1,64 +1,114 @@
+import os
+import numpy as np
 import cv2
-import time
 
-CONFIDENCE_THRESHOLD = 0.7
-NMS_THRESHOLD = 0.4
-COLORS = [(0, 255, 255), (255, 255, 0), (0, 255, 0), (255, 0, 0)]
+from motpy import Detection, MultiObjectTracker, NpImage, Box
+from motpy.core import setup_logger
+from motpy.testing_viz import draw_detection, draw_track, draw_centre
 
-class_names = []
+logger = setup_logger(__name__, 'DEBUG', is_main=True)
 
 VIDEO_PATH = "14_08.mp4"
-#with open("classes.txt", "r") as f:
-with open("assets/coco.names", "r") as f:
-    class_names = [cname.strip() for cname in f.readlines()]
+WEIGHTS_PATH = "assets/custom-yolov4-tiny-detector_final.weights"
+CONFIG_PATH = "assets/custom-yolov4-tiny-detector.cfg"
+
+
+class RunDetection():
+    def __init__(self):
+        self.net = cv2.dnn.readNet(WEIGHTS_PATH, CONFIG_PATH)
+        self.net.setPreferableBackend(cv2.dnn.DNN_BACKEND_OPENCV) #must be enabled for CPU
+        self.net.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU) #must be enabled for CPU
+        self.model = cv2.dnn_DetectionModel(self.net)
+        self.model.setInputParams(size=(416, 416), scale=1/float(255.0), swapRB=True) #float is important for Python version 2!!!  
     
+        self.CONFIDENCE_THRESHOLD = 0.7 
+        self.NMS_THRESHOLD = 0.4
 
-frame_set_no = 22000
-vc = cv2.VideoCapture(VIDEO_PATH)
-vc.set(cv2.CAP_PROP_POS_FRAMES, frame_set_no)
+    def process_image(self, image: NpImage):
 
-net = cv2.dnn.readNet("assets/custom-yolov4-tiny-detector_final.weights", "assets/custom-yolov4-tiny-detector.cfg")
-#net = cv2.dnn.readNet("yolov4-tiny.weights", "yolov4-tiny.cfg")
-net.setPreferableBackend(cv2.dnn.DNN_BACKEND_CUDA) #must be enabled for GPU
-   ### Either DNN_TARGET_CUDA_FP16 or DNN_TARGET_CUDA must be enabled for GPU
-   ### DNN_TARGET_CUDA shows better perf. (default for most CNN)
-   ### DNN_TARGET_CUDA_FP16 shows faster, but only supported for recent GPUs
-#net.setPreferableTarget(cv2.dnn.DNN_TARGET_CUDA_FP16) 
-net.setPreferableTarget(cv2.dnn.DNN_TARGET_CUDA)
-
-#net.setPreferableBackend(cv2.dnn.DNN_BACKEND_OPENCV) #must be enabled for CPU
-#net.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU) #must be enabled for CPU
-
-#net.setPreferableBackend(cv2.dnn.DNN_BACKEND_INFERENCE_ENGINE) #OpenVINO
-#net.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU) #must be enabled for CPU
-
-model = cv2.dnn_DetectionModel(net)
-#model.setInputParams(size=(416, 416), scale=1/255, swapRB=True)
-model.setInputParams(size=(416, 416), scale=1/float(255.0), swapRB=True) #float is important for Python version 2!!!
-
-avg_FPS=0; count=0; total_fps=0;
-while cv2.waitKey(1) < 1:
-    (grabbed, frame) = vc.read()
-    if not grabbed:
-        break
-    start = time.time()
-    classes, scores, boxes = model.detect(frame, CONFIDENCE_THRESHOLD, NMS_THRESHOLD)
-    end = time.time()
-
-    FPS = 1 / (end - start)
-    total_fps = total_fps + FPS; count=count+1;
-    avg_FPS = total_fps / float(count)
-
-    start_drawing = time.time()
-    for (classid, score, box) in zip(classes, scores, boxes):
-        color = COLORS[int(classid) % len(COLORS)]
-        label = "%s : %f" % (class_names[classid[0]], score)
-        cv2.rectangle(frame, box, color, 2)
-        cv2.putText(frame, label, (box[0], box[1] - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
-    end_drawing = time.time()
+        classes, scores, boxes = self.model.detect(image, self.CONFIDENCE_THRESHOLD, self.NMS_THRESHOLD)
     
-    fps_label = "avg FPS: %.2f FPS: %.2f (excluding drawing %.2fms)" % (avg_FPS, 1 / (end - start), (end_drawing - start_drawing) * 1000)
-    cv2.putText(frame, fps_label, (0, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 127), 2)
-    #print(fps_label)
-    cv2.imshow("detections", frame)
-print(avg_FPS)
+        out_detections = []
+        for (classid, score, box) in zip(classes, scores, boxes):
+            confidece_score = np.float32(score[0])
+            #print("score: ",confidece_score, "type: ", type(confidece_score) )
+            #print(type(box))
+            x, y, w, h = box
+
+            xmin = int(x)
+            ymin = int(y)
+            xmax = int(x + w)
+            ymax = int(y +h)
+
+            c1 = int((xmin + xmax) / 2)
+            c2 = int((ymin + ymax) / 2)
+            #cv2.circle(image,(c1,c2), 5, (0,0,255), -1)
+           
+            out_detections.append(Detection(box=[xmin, ymin, xmax, ymax], score=confidece_score, centroid=[c1, c2]))
+
+        return out_detections
+
+
+def run():
+    # prepare multi object tracker
+    model_spec = {'order_pos': 1, 'dim_pos': 2,
+                  'order_size': 0, 'dim_size': 2,
+                  'q_var_pos': 5000., 'r_var_pos': 0.1}
+
+    dt = 1 / 15.0  # assume 15 fps
+    tracker = MultiObjectTracker(dt=dt, model_spec=model_spec)
+
+    # open camera
+    cap = cv2.VideoCapture(VIDEO_PATH)
+    cap.set(cv2.CAP_PROP_POS_FRAMES, 24400)
+
+    detector = RunDetection()
+
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+
+        #frame = cv2.resize(frame, dsize=None, fx=0.5, fy=0.5)
+
+        # run face detector on current frame
+        detections = detector.process_image(frame)
+        #logger.debug(f'detections: {detections}')
+
+        tracker.step(detections)
+        tracks = tracker.active_tracks(min_steps_alive=3)
+        #logger.debug(f'tracks: {tracks}')
+
+        # preview the boxes on frame
+        for det in detections:
+            draw_detection(frame, det) 
+
+        for track in tracks:
+            draw_track(frame, track)
+
+        for item in tracks:
+            draw_centre(frame, item.centroid)
+            #print(item.centroid)
+               
+        
+
+        for item in detections:
+            if 100 <= item.centroid[0] <= 200 and 100 <= item.centroid[1] <= 200:
+                color = (0, 255, 0)
+            else:
+                color = (0, 0, 254)
+
+        #cv2.rectangle(frame, (100, 100), (200, 200), color, 4)
+
+        cv2.imshow('frame', frame)
+
+        # stop demo by pressing 'q'
+        if cv2.waitKey(int(1000 * dt)) & 0xFF == ord('q'):
+            break
+
+    cap.release()
+    cv2.destroyAllWindows()
+
+
+if __name__ == "__main__":
+    run()
