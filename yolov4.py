@@ -1,6 +1,7 @@
 import os
 import numpy as np
 import cv2
+import time
 
 from motpy import Detection, MultiObjectTracker, NpImage, Box
 from motpy.core import setup_logger
@@ -64,10 +65,18 @@ def run():
 
     detector = RunDetection()
 
+
+    # used to record the time at which we processed current frame
+    prev_frame_time = 0; new_frame_time = 0;
     while True:
         ret, frame = cap.read()
         if not ret:
             break
+
+        # get FPS   
+        new_frame_time = time.time()
+        fps = 1/(new_frame_time-prev_frame_time)
+        prev_frame_time = new_frame_time
 
         #frame = cv2.resize(frame, dsize=None, fx=0.5, fy=0.5)
 
@@ -75,9 +84,13 @@ def run():
         detections = detector.process_image(frame)
         #logger.debug(f'detections: {detections}')
 
+        
+
         tracker.step(detections)
         tracks = tracker.active_tracks(min_steps_alive=3)
         #logger.debug(f'tracks: {tracks}')
+
+        print(type(tracks))
 
         # preview the boxes on frame
         for det in detections:
@@ -89,8 +102,7 @@ def run():
         for item in tracks:
             draw_centre(frame, item.centroid)
             #print(item.centroid)
-               
-        
+              
 
         for item in detections:
             if 100 <= item.centroid[0] <= 200 and 100 <= item.centroid[1] <= 200:
@@ -99,7 +111,9 @@ def run():
                 color = (0, 0, 254)
 
         #cv2.rectangle(frame, (100, 100), (200, 200), color, 4)
-
+        
+        cv2.putText(frame, str(len(tracks)), (0, 100), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 127), 2)
+        cv2.putText(frame, str(fps), (50,50), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (36,255,12), 2)
         cv2.imshow('frame', frame)
 
         # stop demo by pressing 'q'
