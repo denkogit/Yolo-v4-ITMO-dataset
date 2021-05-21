@@ -37,8 +37,9 @@ def draw_text(img, text, above_box, color=(255, 255, 255)):
 
 
 def draw_track(img, track: Track, random_color: bool = True, fallback_color=(200, 20, 20)):
-    color = [ord(c) * ord(c) % 256 for c in track.id[:3]] if random_color else fallback_color
-    img = draw_rectangle(img, track.box, color=color, thickness=5)
+    #color = [ord(c) * ord(c) % 256 for c in track.id[:3]] if random_color else fallback_color
+    color = (255,255,255)
+    img = draw_rectangle(img, track.box, color=color, thickness=2)
     img = draw_text(img, track.id[:5] + '...', above_box=track.box)
     return img
 

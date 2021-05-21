@@ -6,13 +6,13 @@ import time
 from motpy import Detection, MultiObjectTracker, NpImage, Box
 from motpy.core import setup_logger
 from motpy.testing_viz import draw_detection, draw_track, draw_centre
+from draw_workplaces import Workplace
 
 logger = setup_logger(__name__, 'DEBUG', is_main=True)
 
 VIDEO_PATH = "14_08.mp4"
 WEIGHTS_PATH = "assets/custom-yolov4-tiny-detector_final.weights"
 CONFIG_PATH = "assets/custom-yolov4-tiny-detector.cfg"
-
 
 class RunDetection():
     def __init__(self):
@@ -25,7 +25,7 @@ class RunDetection():
         self.CONFIDENCE_THRESHOLD = 0.7 
         self.NMS_THRESHOLD = 0.4
 
-    def process_image(self, image: NpImage):
+    def process_image(self, image):
 
         classes, scores, boxes = self.model.detect(image, self.CONFIDENCE_THRESHOLD, self.NMS_THRESHOLD)
     
@@ -41,14 +41,9 @@ class RunDetection():
             xmax = int(x + w)
             ymax = int(y +h)
 
-            c1 = int((xmin + xmax) / 2)
-            c2 = int((ymin + ymax) / 2)
-            #cv2.circle(image,(c1,c2), 5, (0,0,255), -1)
-           
-            out_detections.append(Detection(box=[xmin, ymin, xmax, ymax], score=confidece_score, centroid=[c1, c2]))
+            out_detections.append(Detection(box=[xmin, ymin, xmax, ymax], score=confidece_score))
 
         return out_detections
-
 
 def run():
     # prepare multi object tracker
@@ -57,14 +52,14 @@ def run():
                   'q_var_pos': 5000., 'r_var_pos': 0.1}
 
     dt = 1 / 15.0  # assume 15 fps
+
     tracker = MultiObjectTracker(dt=dt, model_spec=model_spec)
+    detector = RunDetection()
+    workplace = Workplace()
 
     # open camera
     cap = cv2.VideoCapture(VIDEO_PATH)
     cap.set(cv2.CAP_PROP_POS_FRAMES, 24400)
-
-    detector = RunDetection()
-
 
     # used to record the time at which we processed current frame
     prev_frame_time = 0; new_frame_time = 0;
@@ -77,6 +72,7 @@ def run():
         new_frame_time = time.time()
         fps = 1/(new_frame_time-prev_frame_time)
         prev_frame_time = new_frame_time
+        fps = round(fps, 2)
 
         #frame = cv2.resize(frame, dsize=None, fx=0.5, fy=0.5)
 
@@ -85,35 +81,44 @@ def run():
         #logger.debug(f'detections: {detections}')
 
         
-
         tracker.step(detections)
         tracks = tracker.active_tracks(min_steps_alive=3)
         #logger.debug(f'tracks: {tracks}')
 
-        print(type(tracks))
-
+        #reset state of all workplaces
+        workplace.reset_state()
+        #print('data ', workplace.data)
+    
         # preview the boxes on frame
         for det in detections:
             draw_detection(frame, det) 
 
         for track in tracks:
             draw_track(frame, track)
-
+         
         for item in tracks:
             draw_centre(frame, item.centroid)
-            #print(item.centroid)
-              
+            workplace.find_active_zone(frame, item.centroid)
 
-        for item in detections:
-            if 100 <= item.centroid[0] <= 200 and 100 <= item.centroid[1] <= 200:
-                color = (0, 255, 0)
+       
+        #print('data ', workplace.data)
+        #print("--------------------")
+        active_places = 0
+        for item in workplace.data:
+            xmin, ymin, xmax, ymax, number, state = item
+            if state == 0:
+            	color = (0, 0, 255)
+            	cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), color, 2)
             else:
-                color = (0, 0, 254)
+            	color = (0, 255, 0)
+            	cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), color, 2)
+            	active_places+=1
 
-        #cv2.rectangle(frame, (100, 100), (200, 200), color, 4)
-        
-        cv2.putText(frame, str(len(tracks)), (0, 100), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 127), 2)
-        cv2.putText(frame, str(fps), (50,50), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (36,255,12), 2)
+        cv2.putText(frame, f"Total amount of places: {len(workplace.data)} ", (50, 180), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 127), 2)
+        cv2.putText(frame, f"Active places: {active_places} ", (50, 220), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 127), 2)
+        cv2.putText(frame, f"FPS: {fps}", (50,100), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 127), 2)
+        cv2.putText(frame, f"Detected people: {len(tracks)}", (50, 140), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 127), 2)
+
         cv2.imshow('frame', frame)
 
         # stop demo by pressing 'q'
