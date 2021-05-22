@@ -92,8 +92,8 @@ def run():
         # draw tracks
         for track in tracks:
             draw_track(frame, track)
-            draw_centre(frame, item.centroid)
-            workplace.find_active_zone(frame, item.centroid)
+            draw_centre(frame, track.centroid)
+            workplace.find_active_zone(frame, track.centroid)
 
         #print('data ', workplace.data)
         #print("--------------------")
