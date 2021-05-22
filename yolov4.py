@@ -32,10 +32,8 @@ class RunDetection():
         out_detections = []
         for (classid, score, box) in zip(classes, scores, boxes):
             confidece_score = np.float32(score[0])
-            #print("score: ",confidece_score, "type: ", type(confidece_score) )
-            #print(type(box))
-            x, y, w, h = box
 
+            x, y, w, h = box
             xmin = int(x)
             ymin = int(y)
             xmax = int(x + w)
@@ -61,7 +59,7 @@ def run():
     cap = cv2.VideoCapture(VIDEO_PATH)
     cap.set(cv2.CAP_PROP_POS_FRAMES, 24400)
 
-    # used to record the time at which we processed current frame
+    # used to record the time at which we processe current frame
     prev_frame_time = 0; new_frame_time = 0;
     while True:
         ret, frame = cap.read()
@@ -76,31 +74,27 @@ def run():
 
         #frame = cv2.resize(frame, dsize=None, fx=0.5, fy=0.5)
 
-        # run face detector on current frame
+        # run detector on current frame
         detections = detector.process_image(frame)
         #logger.debug(f'detections: {detections}')
 
-        
+        # get taracks 
         tracker.step(detections)
         tracks = tracker.active_tracks(min_steps_alive=3)
         #logger.debug(f'tracks: {tracks}')
 
         #reset state of all workplaces
         workplace.reset_state()
-        #print('data ', workplace.data)
-    
-        # preview the boxes on frame
+
+        # draw detection 
         for det in detections:
             draw_detection(frame, det) 
-
+        # draw tracks
         for track in tracks:
             draw_track(frame, track)
-         
-        for item in tracks:
             draw_centre(frame, item.centroid)
             workplace.find_active_zone(frame, item.centroid)
 
-       
         #print('data ', workplace.data)
         #print("--------------------")
         active_places = 0
