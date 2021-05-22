@@ -18,7 +18,7 @@ class Workplace():
         self.iterator = len(self.data)
 
 
-    def find_active_zone(self, frame, centroid):
+    def find_active_zone(self, centroid):
         
         for i in range(self.iterator):
             row = xmin, ymin, xmax, ymax, number, state = self.data[i]

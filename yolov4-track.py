@@ -38,9 +38,7 @@ class RunDetection():
             ymin = int(y)
             xmax = int(x + w)
             ymax = int(y +h)
-
             out_detections.append(Detection(box=[xmin, ymin, xmax, ymax], score=confidece_score))
-
         return out_detections
 
 def run():
@@ -93,7 +91,7 @@ def run():
         for track in tracks:
             draw_track(frame, track)
             draw_centre(frame, track.centroid)
-            workplace.find_active_zone(frame, track.centroid)
+            workplace.find_active_zone(track.centroid)
 
         #print('data ', workplace.data)
         #print("--------------------")
