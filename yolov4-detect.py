@@ -1,6 +1,7 @@
 import cv2
 import time
 from draw_workplaces import Workplace
+import threading
 
 CONFIDENCE_THRESHOLD = 0.7
 NMS_THRESHOLD = 0.4
@@ -10,7 +11,6 @@ class_names = []
 #with open("classes.txt", "r") as f:
 with open("assets/coco.names", "r") as f:
     class_names = [cname.strip() for cname in f.readlines()]
-
 
 frame_set_no = 880
 cap = cv2.VideoCapture("14_08.mp4")
@@ -47,12 +47,13 @@ while cv2.waitKey(1) < 1:
     prev_frame_time = new_frame_time
     fps = round(fps, 2)
 
+    # run detection
     classes, scores, boxes = model.detect(frame, CONFIDENCE_THRESHOLD, NMS_THRESHOLD)
+
+    #reset state of workplaces 1-active, 0-not active
     workplace.reset_state()
 
-
     for (classid, score, box) in zip(classes, scores, boxes):
-
         x, y, w, h = box
         xmin = int(x)
         ymin = int(y)
@@ -62,27 +63,32 @@ while cv2.waitKey(1) < 1:
         xcentre = int((xmin + xmax) / 2)
         ycentre = int((ymin + ymax) / 2)
 
+        scoreVal = score[0]*100
+        scoreVal = round(scoreVal, 3)
+        
         centroid = [xcentre, ycentre]
         cv2.circle(frame, (xcentre, ycentre), 3, (0,0,255), -1)
 
         workplace.find_active_zone(centroid)
         color = COLORS[int(classid) % len(COLORS)]
-        label = "%s : %f" % (class_names[classid[0]], score)
+        label = f"{class_names[classid[0]]}: {str(scoreVal)}%"
         cv2.rectangle(frame, box, color, 2)
         cv2.putText(frame, label, (box[0], box[1] - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
 
+    #save workplaces state to log.txt file 
+    workplace.save_data()
 
-    #print(workplace.data)
+    #draw workplace boxes 
     active_places = 0
     for item in workplace.data:
         xmin, ymin, xmax, ymax, number, state = item
         if state == 0:
             color = (0, 0, 255)
-            cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), color, 2)
         else:
             color = (0, 255, 0)
-            cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), color, 2)
             active_places+=1
+        cv2.putText(frame, str(number), (xmin, ymin-10), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 0, 255), 1)
+        cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), color, 2)
 
    
     cv2.putText(frame, f"Total amount of places: {len(workplace.data)} ", (50, 180), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 127), 2)

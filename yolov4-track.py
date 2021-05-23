@@ -81,7 +81,7 @@ def run():
         tracks = tracker.active_tracks(min_steps_alive=3)
         #logger.debug(f'tracks: {tracks}')
 
-        #reset state of all workplaces
+        #reset state of workplaces 1-active, 0-not active
         workplace.reset_state()
 
         # draw detection 
@@ -93,18 +93,19 @@ def run():
             draw_centre(frame, track.centroid)
             workplace.find_active_zone(track.centroid)
 
-        #print('data ', workplace.data)
-        #print("--------------------")
         active_places = 0
         for item in workplace.data:
             xmin, ymin, xmax, ymax, number, state = item
             if state == 0:
             	color = (0, 0, 255)
-            	cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), color, 2)
             else:
             	color = (0, 255, 0)
-            	cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), color, 2)
             	active_places+=1
+            cv2.putText(frame, str(number), (xmin, ymin-10), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 0, 255), 1)
+            cv2.rectangle(frame, (xmin, ymin), (xmax, ymax), color, 2)
+    
+        #save workplaces state to log.txt file 
+        workplace.save_data()
 
         cv2.putText(frame, f"Total amount of places: {len(workplace.data)} ", (50, 180), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 127), 2)
         cv2.putText(frame, f"Active places: {active_places} ", (50, 220), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 127), 2)
